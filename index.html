@@ -3912,29 +3912,26 @@ function persistTrades(){
 async function syncTradesToCloud(){
   try{
     if(!fbDb||!fbUser){setTimeout(syncTradesToCloud,3000);return;}
-    const {doc,setDoc,writeBatch,collection}=window._fb;
-    // Split into chunks of 200 trades (well under 1MB limit)
+    const {doc,setDoc}=window._fb;
     const CHUNK=200;
-    const batch=writeBatch(fbDb);
-    // Save metadata doc
-    batch.set(doc(fbDb,'users',fbUser.uid,'data','meta'),{
+    const numChunks=Math.ceil(trades.length/CHUNK);
+    // Save metadata
+    await setDoc(doc(fbDb,'users',fbUser.uid,'data','meta'),{
       totalTrades:trades.length,
-      chunks:Math.ceil(trades.length/CHUNK),
+      chunks:numChunks,
       updatedAt:new Date().toISOString()
     });
-    // Save each chunk
-    for(let i=0;i<Math.ceil(trades.length/CHUNK);i++){
+    // Save each chunk one by one
+    for(let i=0;i<numChunks;i++){
       const chunk=trades.slice(i*CHUNK,(i+1)*CHUNK);
-      batch.set(doc(fbDb,'users',fbUser.uid,'data','chunk_'+i),{
+      await setDoc(doc(fbDb,'users',fbUser.uid,'data','chunk_'+i),{
         trades:chunk,
         index:i
       });
     }
-    await batch.commit();
-    console.log('Synced to cloud:',trades.length,'trades in',Math.ceil(trades.length/CHUNK),'chunks');
+    console.log('Synced:',trades.length,'trades in',numChunks,'chunks');
   }catch(e){
-    console.warn('Cloud sync failed:',e.message);
-    setTimeout(syncTradesToCloud,5000);
+    console.error('Cloud sync failed:',e.code,e.message);
   }
 }
 
